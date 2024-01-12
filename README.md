@@ -14,6 +14,8 @@ checkout to vscode
 
 ```less
 npm install --save @types/react
+
+npm install react@latest react-dom@latest next@latest
 ```
 
 
@@ -60,19 +62,15 @@ learn everything necessary, the learning path: react - nextjs- first demo - read
 
 https://nextjs.org/docs
 
+https://react.dev/learn
 
 
-## notes
+
+## nextjs react foundation 
 
 react foundation https://nextjs.org/learn/react-foundations
 
-how-declarative-ui-compares-to-imperative https://react.dev/learn/reacting-to-input-with-state#how-declarative-ui-compares-to-imperative
-
-**in React, rendering logic and markup live together in the same place—components.** JSX: Putting markup into JavaScript . JSX is a syntax extension for JavaScript that allows you to describe your UI in a familiar *HTML-like* syntax. 3 Rules of JSX  https://react.dev/learn/writing-markup-with-jsx#the-rules-of-jsx
-
-
-
-JS foundation 
+### JS foundation 
 
 1. **函数和箭头函数 (Functions and Arrow Functions)**: 在React中，组件可以通过函数来定义。箭头函数因其简洁性在React组件和事件处理中广泛使用。例如，React组件可以简单地定义为 `const Component = () => Hello World;`。箭头函数还帮助处理`this`关键字的绑定问题。
 2. **对象 (Objects)**: 对象在React中用于保存和处理状态（state）和属性（props）。例如，组件的状态可以是一个对象，如`this.state = { name: 'Alice' };`。属性（props）也是对象，用于将数据传递给子组件。
@@ -85,7 +83,260 @@ JS foundation
 
 
 
-current https://nextjs.org/learn/react-foundations/building-ui-with-components
+### react foundation
+
+
+
+how-declarative-ui-compares-to-imperative https://react.dev/learn/reacting-to-input-with-state#how-declarative-ui-compares-to-imperative
+
+
+
+
+
+### React core conceps
+
+#### **Components**
+
+ This modularity allows your code to be more maintainable as it grows because you can add, update, and delete components without touching the rest of our application. A component is a function that **returns UI elements**.
+
+React components should be capitalized, use React components the same way you'd use regular HTML tags, with angle brackets `<>`
+
+**in React, rendering logic and markup live together in the same place—components.** 
+
+
+
+#### **Props**
+
+you can pass pieces of information as **properties to React components**. These are called `props`. In React, data flows down the component tree. This is referred to as *one-way data flow*. 
+
+Props are read-only information that's passed to components. 
+
+State is information that can change over time, usually triggered by user interaction.
+
+
+
+#### **State**
+
+ React helps us add interactivity with **state** and **event handlers**.
+
+React has a set of functions called **hooks**. Hooks allow you to add additional logic such as state to your components.
+
+You can use *state* to store and increment the number of times a user has clicked the "Like" button. In fact, the React hook used to manage state is called: `useState()`.
+
+```jsx
+function HomePage() {
+  // ...
+  const [likes, setLikes] = React.useState(0);
+}
+```
+
+- first item in the array is the state `value`, It's recommended to name it something descriptive
+- The second item in the array is a function to `update` the value. it's common to prefix it with `set` followed by the name of the state variable you're updating
+- You can also take the opportunity to add the initial value of your `likes` state to `0`
+
+### JSX
+
+JSX: Putting markup into JavaScript . JSX is a syntax extension for JavaScript that allows you to describe your UI in a familiar *HTML-like* syntax. 
+
+- JSX is stricter and has a few more rules than HTML
+
+- 3 Rules of JSX  https://react.dev/learn/writing-markup-with-jsx#the-rules-of-jsx
+
+- Use a JSX Converter https://transform.tools/html-to-jsx
+
+-  use curly braces to weave in and out of "JavaScript" and "JSX" land.
+
+  - ```jsx
+    <ul>
+        {names.map((name) => (
+            <li key={name}>{name}</li>
+         ))}
+    </ul>
+    ```
+
+    
+
+### React emaple so far
+
+
+
+```react
+<html>
+  <body>
+    <div id="app"></div>
+ 
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+ 
+    <script type="text/jsx">
+      const app = document.getElementById("app")
+ 
+      function Header({ title }) {
+        return <h1>{title ? title : "Default title"}</h1>
+      }
+ 
+      function HomePage() {
+        const names = ["Ada Lovelace", "Grace Hopper", "Margaret Hamilton"]
+ 
+        const [likes, setLikes] = React.useState(0)
+ 
+        function handleClick() {
+          setLikes(likes + 1)
+        }
+ 
+        return (
+          <div>
+            <Header title="Develop. Preview. Ship." />
+            <ul>
+              {names.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+ 
+            <button onClick={handleClick}>Like ({likes})</button>
+          </div>
+        )
+      }
+ 
+      const root = ReactDOM.createRoot(app);
+      root.render(<HomePage />);
+    </script>
+  </body>
+</html>
+```
+
+
+
+
+
+```less
+npm install react@latest react-dom@latest next@latest
+```
+
+after installing react, the code will look like below
+
+```js
+import { useState } from 'react';
+ 
+function Header({ title }) {
+  return <h1>{title ? title : 'Default title'}</h1>;
+}
+ 
+function HomePage() {
+  const names = ['Ada Lovelace', 'Grace Hopper', 'Margaret Hamilton'];
+ 
+  const [likes, setLikes] = useState(0);
+ 
+  function handleClick() {
+    setLikes(likes + 1);
+  }
+ 
+  return (
+    <div>
+      <Header title="Develop. Preview. Ship." />
+      <ul>
+        {names.map((name) => (
+          <li key={name}>{name}</li>
+        ))}
+      </ul>
+ 
+      <button onClick={handleClick}>Like ({likes})</button>
+    </div>
+  );
+}
+```
+
+
+
+
+
+###  Server and Client Components 
+
+The **client** refers to the browser on a user’s device that sends a request to a server for your application code. It then turns the response it receives from the server into an interface the user can interact with.
+The **server** refers to the computer in a data center that stores your application code, receives requests from a client, does some computation, and sends back an appropriate response.
+
+
+
+Certain operations (e.g. data fetching or managing user state) are better suited for one environment over the other.
+
+ **Network Boundary** is a conceptual line that separates the different environments. In React, you choose where to place the network boundary in your component tree. For example, you can fetch data and render a user's posts on the server (using Server Components), then render the interactive `LikeButton` for each post on the client (using Client Components).
+
+
+
+Behind the scenes, the components are split into two module graphs. The **server module graph (or tree)** contains all the Server Components that are rendered on the server, and the **client module graph (or tree)** contains all Client Components.
+
+After Server Components are rendered, a special data format called the **React Server Component Payload (RSC)** is sent to the client. The RSC payload contains:
+
+1. The rendered result of Server Components.
+2. Placeholders (or holes) for where Client Components should be rendered and references to their JavaScript files.
+
+React uses this information to consolidate the Server and Client Components and update the DOM on the client.
+
+
+
+Next.js uses Server Components by default.
+
+make the component a Client Component, add the React `'use client'` directive at the **top of the file**. This tells React to render the component on the client.
+
+
+
+## dashboard app
+
+https://nextjs.org/learn/dashboard-app
+
+
+
+### Tailwind to style elements by adding class names
+
+[Tailwind](https://tailwindcss.com/) is a CSS framework that speeds up the development process by allowing you to quickly write [utility classes](https://tailwindcss.com/docs/utility-first) directly in your TSX markup.
+
+### breakpoint with hidden/block
+
+**Tailwind's Responsive Design System**: Tailwind uses a mobile-first approach. It provides various breakpoints (like `sm`, `md`, `lg`, `xl`, `2xl`) that correspond to different minimum screen widths. These breakpoints are used with utility classes to apply styles conditionally based on the screen size.[Nested routing                 ](https://nextjs.org/learn/dashboard-app/creating-layouts-and-pages#nested-routing)
+
+**The `hidden` Class**: This is a utility class in Tailwind CSS that sets the `display` property of an element to `none`, effectively hiding it. When used alone, `hidden` will hide the element on all screen sizes.
+
+**Combining `hidden` with Breakpoints**: When you combine `hidden` with a breakpoint, it changes the behavior based on the screen size. For example, `md:block` means that the element will use `display: block` (become visible) on medium (`md`) screens and larger, but will remain hidden on smaller screens.
+
+**The `block` and `md:hidden` Classes**: The `block` class sets the `display` property to `block`, making the element visible. When combined with `md:hidden`, it means the element will be visible on small screens but will be hidden on medium screens and larger.
+
+
+
+### cls library to toggle class names
+
+[`clsx`](https://www.npmjs.com/package/clsx) is a library that lets you toggle class names easily. 
+
+- Suppose that you want to create an `InvoiceStatus` component which accepts `status`. The status can be `'pending'` or `'paid'`.
+- If it's `'paid'`, you want the color to be green. If it's `'pending'`, you want the color to be gray.
+
+```less
+import clsx from 'clsx';
+ 
+export default function InvoiceStatus({ status }: { status: string }) {
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center rounded-full px-2 py-1 text-sm',
+        {
+          'bg-gray-100 text-gray-500': status === 'pending',
+          'bg-green-500 text-white': status === 'paid',
+        },
+      )}
+    >
+    // ...
+)}
+```
+
+
+
+### file-system routing & colocation
+
+how you can create different pages in Next.js: create a new route segment using a folder, and add a `page` file inside it.
+
+Next.js uses file-system routing where **folders** are used to create nested routes. Each folder represents a **route segment** that maps to a **URL segment**.`page.tsx` is a special Next.js file that exports a React component, and it's required for the route to be accessible.
+
+By having a special name for `page` files, Next.js allows you to [colocate](https://nextjs.org/docs/app/building-your-application/routing#colocation) UI components, test files, and other related code with your routes. Only the content inside the `page` file will be publicly accessible.
 
 
 
