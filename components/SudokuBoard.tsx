@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GameResult, MoveRecord } from '@/lib/game-types';
+import { GameResult, GameStatus, MoveRecord } from '@/lib/game-types';
 import { Board } from '@/utils/sudoku';
 
 const GRID_SIZE = 9;
@@ -12,6 +12,7 @@ type SudokuBoardProps = {
   gameId: string;
   initialPuzzle: Board;
   initialMoves: MoveRecord[];
+  initialStatus: GameStatus;
   initialResult: GameResult | null;
 };
 
@@ -39,6 +40,10 @@ const applyMoves = (puzzle: Board, moves: MoveRecord[]): Board => {
   }
 
   return nextBoard;
+};
+
+const sortMoves = (moves: MoveRecord[]): MoveRecord[] => {
+  return [...moves].sort((left, right) => left.step - right.step);
 };
 
 const hasConflict = (
@@ -137,29 +142,70 @@ const SudokuBoard = ({
   gameId,
   initialPuzzle,
   initialMoves,
+  initialStatus,
   initialResult,
 }: SudokuBoardProps) => {
-  const [board, setBoard] = useState<Board>(() => applyMoves(initialPuzzle, initialMoves));
+  const sortedMoves = useMemo(() => sortMoves(initialMoves), [initialMoves]);
+  const isReplayMode = initialStatus !== 'in_progress' || initialResult !== null;
+  const totalReplaySteps = sortedMoves.length;
+  const [board, setBoard] = useState<Board>(() => applyMoves(initialPuzzle, sortedMoves));
+  const [replayStep, setReplayStep] = useState<number>(isReplayMode ? 0 : totalReplaySteps);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editableCells = useMemo(() => createEditableCells(initialPuzzle), [initialPuzzle]);
   const lastPersistedResult = useRef<GameResult | null>(initialResult);
+  const replayBoard = useMemo(
+    () => applyMoves(initialPuzzle, sortedMoves.slice(0, replayStep)),
+    [initialPuzzle, replayStep, sortedMoves]
+  );
+  const renderedBoard = isReplayMode ? replayBoard : board;
 
-  const invalidCells = useMemo(() => getInvalidCells(board), [board]);
+  const invalidCells = useMemo(() => getInvalidCells(renderedBoard), [renderedBoard]);
   const isBoardFull = useMemo(
-    () => board.every((row) => row.every((cell) => cell !== null)),
-    [board]
+    () => renderedBoard.every((row) => row.every((cell) => cell !== null)),
+    [renderedBoard]
   );
 
   const completionState: CompletionState = useMemo(() => {
+    if (isReplayMode) {
+      return replayStep === totalReplaySteps ? initialResult : null;
+    }
+
     if (!isBoardFull) {
       return null;
     }
 
-    return isSolvedBoard(board) ? 'solved' : 'errors';
-  }, [board, isBoardFull]);
+    return isSolvedBoard(renderedBoard) ? 'solved' : 'errors';
+  }, [
+    initialResult,
+    isBoardFull,
+    isReplayMode,
+    renderedBoard,
+    replayStep,
+    totalReplaySteps,
+  ]);
 
   useEffect(() => {
-    if (!completionState || completionState === lastPersistedResult.current) {
+    if (!isReplayMode || !isAutoPlaying) {
+      return;
+    }
+
+    if (replayStep >= totalReplaySteps) {
+      setIsAutoPlaying(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setReplayStep((previous) => Math.min(previous + 1, totalReplaySteps));
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isAutoPlaying, isReplayMode, replayStep, totalReplaySteps]);
+
+  useEffect(() => {
+    if (isReplayMode || !completionState || completionState === lastPersistedResult.current) {
       return;
     }
 
@@ -183,10 +229,10 @@ const SudokuBoard = ({
     void persistResult().catch(() => {
       setSaveError('Could not save game result.');
     });
-  }, [completionState, gameId]);
+  }, [completionState, gameId, isReplayMode]);
 
   const updateCell = (row: number, col: number, input: string) => {
-    if (!editableCells[row][col]) {
+    if (isReplayMode || !editableCells[row][col]) {
       return;
     }
 
@@ -222,6 +268,29 @@ const SudokuBoard = ({
       });
   };
 
+  const goToPreviousStep = () => {
+    setIsAutoPlaying(false);
+    setReplayStep((previous) => Math.max(previous - 1, 0));
+  };
+
+  const goToNextStep = () => {
+    setIsAutoPlaying(false);
+    setReplayStep((previous) => Math.min(previous + 1, totalReplaySteps));
+  };
+
+  const toggleAutoPlay = () => {
+    if (isAutoPlaying) {
+      setIsAutoPlaying(false);
+      return;
+    }
+
+    if (replayStep >= totalReplaySteps) {
+      setReplayStep(0);
+    }
+
+    setIsAutoPlaying(true);
+  };
+
   return (
     <section className="w-full max-w-[420px]">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -229,8 +298,51 @@ const SudokuBoard = ({
         <p className="text-xs text-slate-500">Game ID: {gameId}</p>
       </div>
 
+      {isReplayMode && (
+        <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-3">
+          <p className="text-sm font-semibold text-slate-800">Replay mode</p>
+          <p className="mt-1 text-sm text-slate-700">
+            Step {replayStep} of {totalReplaySteps}
+          </p>
+          <p className="mt-1 text-sm text-slate-700">
+            Final result:{' '}
+            {initialResult === 'solved'
+              ? 'Solved correctly'
+              : initialResult === 'errors'
+                ? 'Completed with errors'
+                : 'Unknown'}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goToPreviousStep}
+              disabled={replayStep === 0}
+              className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={toggleAutoPlay}
+              disabled={totalReplaySteps === 0}
+              className="rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+            >
+              {isAutoPlaying ? 'Pause' : 'Auto-play'}
+            </button>
+            <button
+              type="button"
+              onClick={goToNextStep}
+              disabled={replayStep === totalReplaySteps}
+              className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-9">
-        {board.map((row, rowIndex) =>
+        {renderedBoard.map((row, rowIndex) =>
           row.map((value, colIndex) => {
             const isEditable = editableCells[rowIndex][colIndex];
             const isInvalid = invalidCells[rowIndex][colIndex];
@@ -242,7 +354,7 @@ const SudokuBoard = ({
                 inputMode="numeric"
                 maxLength={1}
                 value={value ?? ''}
-                disabled={!isEditable}
+                disabled={isReplayMode || !isEditable}
                 onChange={(event) =>
                   updateCell(rowIndex, colIndex, event.target.value)
                 }
@@ -267,15 +379,25 @@ const SudokuBoard = ({
       </div>
 
       <p className="mt-4 min-h-6 text-sm text-slate-700">
-        {!isBoardFull &&
-          'Fill the blank cells. Invalid entries are highlighted in red.'}
-        {completionState === 'solved' && (
+        {!isReplayMode && !isBoardFull && (
+          'Fill the blank cells. Invalid entries are highlighted in red.'
+        )}
+        {!isReplayMode && completionState === 'solved' && (
           <span className="font-medium text-green-700">Solved correctly.</span>
         )}
-        {completionState === 'errors' && (
+        {!isReplayMode && completionState === 'errors' && (
           <span className="font-medium text-red-700">
             Board is full, but the solution has errors.
           </span>
+        )}
+        {isReplayMode && replayStep < totalReplaySteps && (
+          <span>Use previous/next or auto-play to step through the saved moves.</span>
+        )}
+        {isReplayMode && replayStep === totalReplaySteps && completionState === 'solved' && (
+          <span className="font-medium text-green-700">Replay complete: solved correctly.</span>
+        )}
+        {isReplayMode && replayStep === totalReplaySteps && completionState === 'errors' && (
+          <span className="font-medium text-red-700">Replay complete: completed with errors.</span>
         )}
       </p>
 
