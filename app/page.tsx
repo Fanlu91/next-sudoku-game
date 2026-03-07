@@ -2,9 +2,9 @@ import SudokuBoard from '@/components/SudokuBoard';
 
 const Home = () => {
   return (
-    <div className="flex justify-center items-center py-4 h-screen">
+    <main className="flex min-h-screen items-center justify-center px-4 py-8">
       <SudokuBoard />
-    </div>
+    </main>
   );
 };
 
