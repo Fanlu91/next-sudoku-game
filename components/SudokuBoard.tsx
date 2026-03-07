@@ -1,21 +1,44 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Board, createSudoku } from '@/utils/sudoku';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { GameResult, MoveRecord } from '@/lib/game-types';
+import { Board } from '@/utils/sudoku';
 
 const GRID_SIZE = 9;
 
-type CompletionState = 'solved' | 'errors' | null;
+type CompletionState = GameResult | null;
 
-const createEmptyBoard = (): Board =>
-  Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+type SudokuBoardProps = {
+  gameId: string;
+  initialPuzzle: Board;
+  initialMoves: MoveRecord[];
+  initialResult: GameResult | null;
+};
 
-const createPuzzleBoard = (): Board => {
-  const board: Board = Array.from({ length: GRID_SIZE }, () =>
-    Array(GRID_SIZE).fill(0)
-  );
-  createSudoku(board, 'normal');
-  return board.map((row) => row.map((cell) => (cell === 0 ? null : cell)));
+const createEditableCells = (puzzle: Board): boolean[][] => {
+  return puzzle.map((row) => row.map((value) => value === null));
+};
+
+const applyMoves = (puzzle: Board, moves: MoveRecord[]): Board => {
+  const nextBoard = puzzle.map((row) => [...row]);
+
+  for (const move of [...moves].sort((left, right) => left.step - right.step)) {
+    if (!Number.isInteger(move.row) || !Number.isInteger(move.col)) {
+      continue;
+    }
+
+    if (move.row < 0 || move.row >= GRID_SIZE || move.col < 0 || move.col >= GRID_SIZE) {
+      continue;
+    }
+
+    if (puzzle[move.row][move.col] !== null) {
+      continue;
+    }
+
+    nextBoard[move.row][move.col] = move.value;
+  }
+
+  return nextBoard;
 };
 
 const hasConflict = (
@@ -110,12 +133,16 @@ const isSolvedBoard = (board: Board): boolean => {
   return true;
 };
 
-const SudokuBoard = () => {
-  const [board, setBoard] = useState<Board>(createEmptyBoard());
-  const [editableCells, setEditableCells] = useState<boolean[][]>(
-    Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false))
-  );
-  const [hasPuzzle, setHasPuzzle] = useState(false);
+const SudokuBoard = ({
+  gameId,
+  initialPuzzle,
+  initialMoves,
+  initialResult,
+}: SudokuBoardProps) => {
+  const [board, setBoard] = useState<Board>(() => applyMoves(initialPuzzle, initialMoves));
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const editableCells = useMemo(() => createEditableCells(initialPuzzle), [initialPuzzle]);
+  const lastPersistedResult = useRef<GameResult | null>(initialResult);
 
   const invalidCells = useMemo(() => getInvalidCells(board), [board]);
   const isBoardFull = useMemo(
@@ -124,19 +151,39 @@ const SudokuBoard = () => {
   );
 
   const completionState: CompletionState = useMemo(() => {
-    if (!hasPuzzle || !isBoardFull) {
+    if (!isBoardFull) {
       return null;
     }
 
     return isSolvedBoard(board) ? 'solved' : 'errors';
-  }, [board, hasPuzzle, isBoardFull]);
+  }, [board, isBoardFull]);
 
-  const generatePuzzle = () => {
-    const puzzle = createPuzzleBoard();
-    setBoard(puzzle);
-    setEditableCells(puzzle.map((row) => row.map((value) => value === null)));
-    setHasPuzzle(true);
-  };
+  useEffect(() => {
+    if (!completionState || completionState === lastPersistedResult.current) {
+      return;
+    }
+
+    const persistResult = async () => {
+      const response = await fetch(`/api/games/${gameId}/result`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ result: completionState }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Unable to save result');
+      }
+
+      lastPersistedResult.current = completionState;
+      setSaveError(null);
+    };
+
+    void persistResult().catch(() => {
+      setSaveError('Could not save game result.');
+    });
+  }, [completionState, gameId]);
 
   const updateCell = (row: number, col: number, input: string) => {
     if (!editableCells[row][col]) {
@@ -144,40 +191,48 @@ const SudokuBoard = () => {
     }
 
     const nextChar = input.slice(-1);
+    if (nextChar !== '' && !/^[1-9]$/.test(nextChar)) {
+      return;
+    }
+
+    const nextValue = nextChar === '' ? null : Number(nextChar);
 
     setBoard((previous) => {
       const nextBoard = previous.map((currentRow) => [...currentRow]);
-
-      if (nextChar === '') {
-        nextBoard[row][col] = null;
-        return nextBoard;
-      }
-
-      if (/^[1-9]$/.test(nextChar)) {
-        nextBoard[row][col] = Number(nextChar);
-      }
-
+      nextBoard[row][col] = nextValue;
       return nextBoard;
     });
+
+    void fetch(`/api/games/${gameId}/moves`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ row, col, value: nextValue }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Unable to save move');
+        }
+
+        setSaveError(null);
+      })
+      .catch(() => {
+        setSaveError('Could not save your latest move.');
+      });
   };
 
   return (
     <section className="w-full max-w-[420px]">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Sudoku</h1>
-        <button
-          type="button"
-          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          onClick={generatePuzzle}
-        >
-          Generate Puzzle
-        </button>
+        <p className="text-xs text-slate-500">Game ID: {gameId}</p>
       </div>
 
       <div className="grid grid-cols-9">
         {board.map((row, rowIndex) =>
           row.map((value, colIndex) => {
-            const isEditable = hasPuzzle && editableCells[rowIndex][colIndex];
+            const isEditable = editableCells[rowIndex][colIndex];
             const isInvalid = invalidCells[rowIndex][colIndex];
 
             return (
@@ -212,8 +267,7 @@ const SudokuBoard = () => {
       </div>
 
       <p className="mt-4 min-h-6 text-sm text-slate-700">
-        {!hasPuzzle && 'Click Generate Puzzle to start a new game.'}
-        {hasPuzzle && !isBoardFull &&
+        {!isBoardFull &&
           'Fill the blank cells. Invalid entries are highlighted in red.'}
         {completionState === 'solved' && (
           <span className="font-medium text-green-700">Solved correctly.</span>
@@ -224,6 +278,10 @@ const SudokuBoard = () => {
           </span>
         )}
       </p>
+
+      {saveError && (
+        <p className="mt-2 text-sm font-medium text-red-700">{saveError}</p>
+      )}
     </section>
   );
 };

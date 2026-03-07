@@ -1,9 +1,9 @@
-import SudokuBoard from '@/components/SudokuBoard';
+import NewGameButton from '@/components/NewGameButton';
 
 const Home = () => {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-8">
-      <SudokuBoard />
+      <NewGameButton />
     </main>
   );
 };
