@@ -22,6 +22,7 @@ const GamePage = async ({ params }: GamePageProps) => {
         gameId={game.id}
         initialPuzzle={game.puzzle}
         initialMoves={game.moves}
+        initialStatus={game.status}
         initialResult={game.result}
       />
       <Link href="/" className="text-sm font-medium text-slate-700 underline">
