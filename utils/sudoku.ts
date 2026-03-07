@@ -1,40 +1,50 @@
 export type Board = (number | null)[][];
 
+const GRID_SIZE = 9;
+
 function isValid(board: Board, row: number, col: number, num: number): boolean {
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < GRID_SIZE; i++) {
     const m = 3 * Math.floor(row / 3) + Math.floor(i / 3);
     const n = 3 * Math.floor(col / 3) + (i % 3);
+
     if (board[row][i] === num || board[i][col] === num || board[m][n] === num) {
       return false;
     }
   }
+
   return true;
 }
 
-export function createSudoku(
-  board: Board,
-  difficulty: string,
-  row = 0,
-  col = 0
-): boolean {
-  if (row === 9) {
-    clearCellsForDifficulty(board, difficulty); // 新增：根据难度清空单元格
+function fillBoard(board: Board, row = 0, col = 0): boolean {
+  if (row === GRID_SIZE) {
     return true;
   }
-  if (col === 9) return createSudoku(board, difficulty, row + 1, 0);
-  if (board[row][col] !== 0)
-    return createSudoku(board, difficulty, row, col + 1);
+
+  if (col === GRID_SIZE) {
+    return fillBoard(board, row + 1, 0);
+  }
+
+  if (board[row][col] !== 0) {
+    return fillBoard(board, row, col + 1);
+  }
 
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
   shuffleArray(numbers);
 
   for (const num of numbers) {
-    if (isValid(board, row, col, num)) {
-      board[row][col] = num;
-      if (createSudoku(board, difficulty, row, col + 1)) return true;
-      board[row][col] = 0;
+    if (!isValid(board, row, col, num)) {
+      continue;
     }
+
+    board[row][col] = num;
+
+    if (fillBoard(board, row, col + 1)) {
+      return true;
+    }
+
+    board[row][col] = 0;
   }
+
   return false;
 }
 
@@ -46,15 +56,73 @@ function shuffleArray(array: number[]): void {
 }
 
 function clearCellsForDifficulty(board: Board, difficulty: string): void {
-  const empties =
-    difficulty === 'easy' ? 20 : difficulty === 'normal' ? 40 : 60;
-  for (let i = 0; i < empties; i++) {
-    const row = Math.floor(Math.random() * 9);
-    const col = Math.floor(Math.random() * 9);
-    if (board[row][col] !== null) {
-      board[row][col] = null;
-    } else {
-      i--;
+  const empties = difficulty === 'easy' ? 20 : difficulty === 'normal' ? 40 : 60;
+  let cleared = 0;
+
+  while (cleared < empties) {
+    const row = Math.floor(Math.random() * GRID_SIZE);
+    const col = Math.floor(Math.random() * GRID_SIZE);
+
+    if (board[row][col] === null) {
+      continue;
     }
+
+    board[row][col] = null;
+    cleared += 1;
   }
+}
+
+export function createPuzzleAndSolution(difficulty: string): {
+  puzzle: Board;
+  solution: Board;
+} {
+  const solution: Board = Array.from({ length: GRID_SIZE }, () =>
+    Array(GRID_SIZE).fill(0)
+  );
+
+  fillBoard(solution);
+
+  const puzzle = solution.map((row) => [...row]);
+  clearCellsForDifficulty(puzzle, difficulty);
+
+  return { puzzle, solution };
+}
+
+export function createSudoku(
+  board: Board,
+  difficulty: string,
+  row = 0,
+  col = 0
+): boolean {
+  if (row === GRID_SIZE) {
+    clearCellsForDifficulty(board, difficulty);
+    return true;
+  }
+
+  if (col === GRID_SIZE) {
+    return createSudoku(board, difficulty, row + 1, 0);
+  }
+
+  if (board[row][col] !== 0) {
+    return createSudoku(board, difficulty, row, col + 1);
+  }
+
+  const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  shuffleArray(numbers);
+
+  for (const num of numbers) {
+    if (!isValid(board, row, col, num)) {
+      continue;
+    }
+
+    board[row][col] = num;
+
+    if (createSudoku(board, difficulty, row, col + 1)) {
+      return true;
+    }
+
+    board[row][col] = 0;
+  }
+
+  return false;
 }
