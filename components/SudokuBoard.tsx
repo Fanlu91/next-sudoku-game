@@ -1,291 +1,230 @@
 'use client';
 
-import SudokuCell from '@/components/SudokuCell';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Board, createSudoku } from '@/utils/sudoku';
 
-type GameDifficulty = 'normal' | 'easy' | 'hard';
+const GRID_SIZE = 9;
+
+type CompletionState = 'solved' | 'errors' | null;
+
+const createEmptyBoard = (): Board =>
+  Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+const createPuzzleBoard = (): Board => {
+  const board: Board = Array.from({ length: GRID_SIZE }, () =>
+    Array(GRID_SIZE).fill(0)
+  );
+  createSudoku(board, 'normal');
+  return board.map((row) => row.map((cell) => (cell === 0 ? null : cell)));
+};
+
+const hasConflict = (
+  board: Board,
+  row: number,
+  col: number,
+  value: number
+): boolean => {
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (i !== col && board[row][i] === value) {
+      return true;
+    }
+
+    if (i !== row && board[i][col] === value) {
+      return true;
+    }
+  }
+
+  const startRow = Math.floor(row / 3) * 3;
+  const startCol = Math.floor(col / 3) * 3;
+
+  for (let r = startRow; r < startRow + 3; r++) {
+    for (let c = startCol; c < startCol + 3; c++) {
+      if ((r !== row || c !== col) && board[r][c] === value) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+const getInvalidCells = (board: Board): boolean[][] => {
+  const invalid: boolean[][] = Array.from({ length: GRID_SIZE }, () =>
+    Array(GRID_SIZE).fill(false)
+  );
+
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const value = board[row][col];
+      if (value === null) {
+        continue;
+      }
+
+      if (value < 1 || value > 9 || hasConflict(board, row, col, value)) {
+        invalid[row][col] = true;
+      }
+    }
+  }
+
+  return invalid;
+};
+
+const isValidGroup = (values: (number | null)[]): boolean => {
+  if (values.some((value) => value === null)) {
+    return false;
+  }
+
+  return new Set(values).size === GRID_SIZE;
+};
+
+const isSolvedBoard = (board: Board): boolean => {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    if (!isValidGroup(board[row])) {
+      return false;
+    }
+  }
+
+  for (let col = 0; col < GRID_SIZE; col++) {
+    const column = board.map((row) => row[col]);
+    if (!isValidGroup(column)) {
+      return false;
+    }
+  }
+
+  for (let boxRow = 0; boxRow < 3; boxRow++) {
+    for (let boxCol = 0; boxCol < 3; boxCol++) {
+      const values: (number | null)[] = [];
+
+      for (let row = boxRow * 3; row < boxRow * 3 + 3; row++) {
+        for (let col = boxCol * 3; col < boxCol * 3 + 3; col++) {
+          values.push(board[row][col]);
+        }
+      }
+
+      if (!isValidGroup(values)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
 
 const SudokuBoard = () => {
-  const [selectedCell, setSelectedCell] = useState(-1);
-  const [sudokuBoard, setSudokuBoard] = useState<Board>(
-    Array.from({ length: 9 }, () => Array(9).fill(0))
+  const [board, setBoard] = useState<Board>(createEmptyBoard());
+  const [editableCells, setEditableCells] = useState<boolean[][]>(
+    Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false))
   );
-  const [difficulty, setDifficulty] = useState<GameDifficulty>('normal');
-  const [currentValue, setCurrentValue] = useState<number | null>(null);
+  const [hasPuzzle, setHasPuzzle] = useState(false);
 
-  const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+  const invalidCells = useMemo(() => getInvalidCells(board), [board]);
+  const isBoardFull = useMemo(
+    () => board.every((row) => row.every((cell) => cell !== null)),
+    [board]
+  );
 
-  const [history, setHistory] = useState<Board[]>([]);
-  const [initialEmptyCells, setInitialEmptyCells] = useState<boolean[][]>([]);
-  const [highlightedCells, setHighlightedCells] = useState<number[]>([]);
-
-  useEffect(() => {
-    const newBoard = Array.from({ length: 9 }, () => Array(9).fill(0));
-    createSudoku(newBoard, difficulty);
-    setSudokuBoard(newBoard);
-
-    const emptyCells = newBoard.map((row) => row.map((cell) => cell === null));
-    setInitialEmptyCells(emptyCells);
-  }, [difficulty]);
-
-  useEffect(() => {
-    if (selectedCell !== -1) {
-      const row = Math.floor(selectedCell / 9);
-      const col = selectedCell % 9;
-      const cellValue = sudokuBoard[row][col];
-
-      if (typeof cellValue === 'number') {
-        setSelectedNumber(cellValue);
-      } else {
-        setSelectedNumber(null);
-      }
+  const completionState: CompletionState = useMemo(() => {
+    if (!hasPuzzle || !isBoardFull) {
+      return null;
     }
-  }, [selectedCell, sudokuBoard]);
 
-  const resetGame = () => {
-    const newBoard = Array.from({ length: 9 }, () => Array(9).fill(0));
-    createSudoku(newBoard, difficulty);
+    return isSolvedBoard(board) ? 'solved' : 'errors';
+  }, [board, hasPuzzle, isBoardFull]);
 
-    setSudokuBoard(newBoard);
-
-    const emptyCells = newBoard.map((row) => row.map((cell) => cell === null));
-    setInitialEmptyCells(emptyCells);
-    setSelectedCell(-1);
-
-    setHighlightedCells([]);
+  const generatePuzzle = () => {
+    const puzzle = createPuzzleBoard();
+    setBoard(puzzle);
+    setEditableCells(puzzle.map((row) => row.map((value) => value === null)));
+    setHasPuzzle(true);
   };
 
-  const sudokuArray = sudokuBoard.flat();
+  const updateCell = (row: number, col: number, input: string) => {
+    if (!editableCells[row][col]) {
+      return;
+    }
 
-  const handleDifficultyChange = (newDifficulty: GameDifficulty) => {
-    setDifficulty(newDifficulty);
-    resetGame();
-  };
+    const nextChar = input.slice(-1);
 
-  const handleCellChange = (index: number) => {
-    const newValue = sudokuBoard[Math.floor(index / 9)][index % 9];
-    if (selectedCell === index) {
-      setSelectedCell(-1);
-      setHighlightedCells([]);
-    } else {
-      setSelectedCell(index);
-      if (newValue) {
-        const newHighlightedCells: number[] = [];
-        sudokuBoard.forEach((row, rowIndex) => {
-          row.forEach((cellValue, colIndex) => {
-            if (cellValue === newValue) {
-              newHighlightedCells.push(rowIndex * 9 + colIndex);
-            }
-          });
-        });
-        setHighlightedCells(newHighlightedCells);
-      } else {
-        setHighlightedCells([]);
+    setBoard((previous) => {
+      const nextBoard = previous.map((currentRow) => [...currentRow]);
+
+      if (nextChar === '') {
+        nextBoard[row][col] = null;
+        return nextBoard;
       }
-    }
-  };
 
-  const handleNumberSelect = (num: number) => {
-    if (selectedCell !== -1) {
-      const row = Math.floor(selectedCell / 9);
-      const col = selectedCell % 9;
-
-      if (sudokuBoard[row][col] === null) {
-        const newBoard = sudokuBoard.map((row) => [...row]);
-        newBoard[row][col] = num;
-
-        setHistory((prev) => [...prev, sudokuBoard]);
-        setSudokuBoard(newBoard);
+      if (/^[1-9]$/.test(nextChar)) {
+        nextBoard[row][col] = Number(nextChar);
       }
-    }
-  };
 
-  const checkForErrors = (index: number): boolean => {
-    const row = Math.floor(index / 9);
-    const col = index % 9;
-    const num = sudokuBoard[row][col];
-
-    if (num === null) {
-      return false;
-    }
-
-    for (let i = 0; i < 9; i++) {
-      if (i !== col && sudokuBoard[row][i] === num) return true;
-      if (i !== row && sudokuBoard[i][col] === num) return true;
-    }
-
-    const startRow = Math.floor(row / 3) * 3;
-    const startCol = Math.floor(col / 3) * 3;
-    for (let i = startRow; i < startRow + 3; i++) {
-      for (let j = startCol; j < startCol + 3; j++) {
-        if (i !== row && j !== col && sudokuBoard[i][j] === num) return true;
-      }
-    }
-
-    return false;
-  };
-
-  const validateSolution = () => {
-    for (let row = 0; row < 9; row++) {
-      if (!isValidSet(sudokuBoard[row])) {
-        return false;
-      }
-    }
-
-    for (let col = 0; col < 9; col++) {
-      const column = sudokuBoard.map((row) => row[col]);
-      if (!isValidSet(column)) {
-        return false;
-      }
-    }
-
-    for (let boxRow = 0; boxRow < 3; boxRow++) {
-      for (let boxCol = 0; boxCol < 3; boxCol++) {
-        const box = [];
-        for (let row = boxRow * 3; row < boxRow * 3 + 3; row++) {
-          for (let col = boxCol * 3; col < boxCol * 3 + 3; col++) {
-            box.push(sudokuBoard[row][col]);
-          }
-        }
-        if (!isValidSet(box)) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  };
-
-  const isValidSet = (items: (number | null)[]) => {
-    const numbers = items.filter((item) => item !== null);
-    if (numbers.length !== 9) {
-      return false;
-    }
-    return new Set(numbers).size === 9;
-  };
-
-  const undo = () => {
-    setHistory((prev) => {
-      if (prev.length === 0) return prev;
-
-      const lastBoard = prev[prev.length - 1];
-      setSudokuBoard(lastBoard.map((row) => [...row]));
-      return prev.slice(0, prev.length - 1);
+      return nextBoard;
     });
   };
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4">
-      <div className="flex gap-3 justify-center">
+    <section className="w-full max-w-[420px]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Sudoku</h1>
         <button
-          className="mt-4 p-2 bg-gray-200 hover:bg-gray-900 hover:text-white rounded"
-          onClick={() => {
-            const isCorrect = validateSolution();
-            if (isCorrect) {
-              alert('恭喜，您成功解开了数独！');
-            } else {
-              alert('解答错误，请再试一次。');
-            }
-          }}
+          type="button"
+          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          onClick={generatePuzzle}
         >
-          提交
-        </button>
-        <button
-          className="mt-4 p-2 bg-gray-200 hover:bg-gray-900 hover:text-white rounded"
-          onClick={resetGame}
-        >
-          重置
-        </button>
-        <button
-          className="mt-4 p-2 bg-gray-200 rounded hover:bg-gray-900 hover:text-white"
-          onClick={() => handleDifficultyChange('easy')}
-        >
-          简单
-        </button>
-        <button
-          className="mt-4 p-2 bg-gray-200 rounded hover:bg-gray-900 hover:text-white"
-          onClick={() => handleDifficultyChange('normal')}
-        >
-          普通
-        </button>
-        <button
-          className="mt-4 p-2 bg-gray-200 rounded hover:bg-gray-900 hover:text-white"
-          onClick={() => handleDifficultyChange('hard')}
-        >
-          困难
+          Generate Puzzle
         </button>
       </div>
-      <div className="grid grid-cols-9 gap-0 bg-gray-50 border border-gray-600">
-        {sudokuArray.map((value, index) => {
-          const row = Math.floor(index / 9);
-          const col = index % 9;
 
-          const borderStyle = `border border-gray-300 ${
-            row % 3 === 0 ? 'border-t-gray-600' : ''
-          } ${col % 3 === 0 ? 'border-l-gray-600' : ''} ${
-            row % 3 === 2 ? 'border-b-gray-600' : ''
-          } ${col % 3 === 2 ? 'border-r-gray-600' : ''}`;
+      <div className="grid grid-cols-9">
+        {board.map((row, rowIndex) =>
+          row.map((value, colIndex) => {
+            const isEditable = hasPuzzle && editableCells[rowIndex][colIndex];
+            const isInvalid = invalidCells[rowIndex][colIndex];
 
-          const highlightError = checkForErrors(index);
-          const highlight = value === selectedNumber && selectedNumber !== null;
-          const initialEmpty =
-            initialEmptyCells[row] && initialEmptyCells[row][col];
-          const isHighlighted = highlightedCells.includes(index);
-
-          return (
-            <SudokuCell
-              key={index}
-              index={index}
-              value={value}
-              isSelected={index === selectedCell}
-              onChange={handleCellChange}
-              borderStyle={borderStyle}
-              currentValue={currentValue}
-              selectedRow={Math.floor(selectedCell / 9)}
-              selectedCol={selectedCell % 9}
-              highlightError={highlightError}
-              highlight={isHighlighted}
-              initialEmpty={initialEmpty}
-            />
-          );
-        })}
+            return (
+              <input
+                key={`${rowIndex}-${colIndex}`}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={value ?? ''}
+                disabled={!isEditable}
+                onChange={(event) =>
+                  updateCell(rowIndex, colIndex, event.target.value)
+                }
+                aria-label={`Row ${rowIndex + 1} Column ${colIndex + 1}`}
+                className={`h-10 w-10 border text-center text-lg focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                  isEditable
+                    ? 'bg-white text-slate-900'
+                    : 'bg-slate-100 font-semibold text-slate-800'
+                } ${isInvalid ? 'border-red-500 bg-red-100 text-red-700' : 'border-slate-300'}`}
+                style={{
+                  borderTopWidth: rowIndex % 3 === 0 ? '2px' : '1px',
+                  borderLeftWidth: colIndex % 3 === 0 ? '2px' : '1px',
+                  borderRightWidth:
+                    colIndex === GRID_SIZE - 1 || colIndex % 3 === 2 ? '2px' : '1px',
+                  borderBottomWidth:
+                    rowIndex === GRID_SIZE - 1 || rowIndex % 3 === 2 ? '2px' : '1px',
+                }}
+              />
+            );
+          })
+        )}
       </div>
-      <div>
-        <div className="grid grid-cols-5">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-            <button
-              key={num}
-              className={`w-12 h-12 m-1 ${
-                currentValue === num ? 'bg-yellow-400' : 'bg-gray-200'
-              }`}
-              onClick={() => handleNumberSelect(num)}
-            >
-              {num}
-            </button>
-          ))}
-          <button
-            className="w-12 h-12 m-1 bg-gray-200 flex justify-center items-center"
-            onClick={undo}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 14 4 9l5-5" />
-              <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
+
+      <p className="mt-4 min-h-6 text-sm text-slate-700">
+        {!hasPuzzle && 'Click Generate Puzzle to start a new game.'}
+        {hasPuzzle && !isBoardFull &&
+          'Fill the blank cells. Invalid entries are highlighted in red.'}
+        {completionState === 'solved' && (
+          <span className="font-medium text-green-700">Solved correctly.</span>
+        )}
+        {completionState === 'errors' && (
+          <span className="font-medium text-red-700">
+            Board is full, but the solution has errors.
+          </span>
+        )}
+      </p>
+    </section>
   );
 };
 
