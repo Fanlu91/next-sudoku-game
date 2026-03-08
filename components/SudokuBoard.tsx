@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameResult, GameStatus, MoveRecord } from '@/lib/game-types';
-import { Board, solveBoard } from '@/utils/sudoku';
+import { Board, createSolvePlan } from '@/utils/sudoku';
 
 const GRID_SIZE = 9;
 const STEP_DELAY_MS = 2000;
@@ -275,28 +275,17 @@ const SudokuBoard = ({
       return;
     }
 
-    const solvedBoard = solveBoard(board);
-    if (!solvedBoard) {
+    const solvePlan = createSolvePlan(board);
+    if (!solvePlan) {
       setSaveError('This puzzle cannot be solved from the current board.');
       return;
     }
 
-    const steps: Array<{ row: number; col: number; value: number }> = [];
-
-    for (let row = 0; row < GRID_SIZE; row++) {
-      for (let col = 0; col < GRID_SIZE; col++) {
-        if (board[row][col] !== null) {
-          continue;
-        }
-
-        const value = solvedBoard[row][col];
-        if (value === null) {
-          continue;
-        }
-
-        steps.push({ row, col, value });
-      }
-    }
+    const steps = solvePlan.map((step) => ({
+      row: step.row,
+      col: step.col,
+      value: step.value,
+    }));
 
     if (steps.length === 0) {
       return;

@@ -4,6 +4,21 @@ const GRID_SIZE = 9;
 const BOX_SIZE = 3;
 
 type FillableBoard = number[][];
+type CandidateMap = Array<number[]>;
+
+export type SolvePlanReason =
+  | 'naked_single'
+  | 'hidden_single_row'
+  | 'hidden_single_col'
+  | 'hidden_single_box'
+  | 'guided_choice';
+
+export type SolvePlanStep = {
+  row: number;
+  col: number;
+  value: number;
+  reason: SolvePlanReason;
+};
 
 const isIntegerInRange = (value: unknown, min: number, max: number): value is number => {
   return Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
@@ -142,6 +157,210 @@ const solveNormalizedBoard = (board: FillableBoard): boolean => {
   return true;
 };
 
+const cloneNormalizedBoard = (board: FillableBoard): FillableBoard => {
+  return board.map((row) => [...row]);
+};
+
+const hasEmptyCell = (board: FillableBoard): boolean => {
+  return board.some((row) => row.some((value) => value === 0));
+};
+
+const getCandidates = (board: FillableBoard, row: number, col: number): number[] => {
+  if (board[row][col] !== 0) {
+    return [];
+  }
+
+  const candidates: number[] = [];
+
+  for (let candidate = 1; candidate <= GRID_SIZE; candidate++) {
+    if (isValidPlacement(board, row, col, candidate)) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
+};
+
+const findNakedSingleStep = (board: FillableBoard): SolvePlanStep | null => {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const candidates = getCandidates(board, row, col);
+      if (candidates.length !== 1) {
+        continue;
+      }
+
+      return {
+        row,
+        col,
+        value: candidates[0],
+        reason: 'naked_single',
+      };
+    }
+  }
+
+  return null;
+};
+
+const findHiddenSingleInRow = (board: FillableBoard): SolvePlanStep | null => {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    const positionByCandidate: CandidateMap = Array.from(
+      { length: GRID_SIZE + 1 },
+      () => []
+    );
+
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const candidates = getCandidates(board, row, col);
+      for (const candidate of candidates) {
+        positionByCandidate[candidate].push(col);
+      }
+    }
+
+    for (let candidate = 1; candidate <= GRID_SIZE; candidate++) {
+      if (positionByCandidate[candidate].length !== 1) {
+        continue;
+      }
+
+      return {
+        row,
+        col: positionByCandidate[candidate][0],
+        value: candidate,
+        reason: 'hidden_single_row',
+      };
+    }
+  }
+
+  return null;
+};
+
+const findHiddenSingleInCol = (board: FillableBoard): SolvePlanStep | null => {
+  for (let col = 0; col < GRID_SIZE; col++) {
+    const positionByCandidate: CandidateMap = Array.from(
+      { length: GRID_SIZE + 1 },
+      () => []
+    );
+
+    for (let row = 0; row < GRID_SIZE; row++) {
+      const candidates = getCandidates(board, row, col);
+      for (const candidate of candidates) {
+        positionByCandidate[candidate].push(row);
+      }
+    }
+
+    for (let candidate = 1; candidate <= GRID_SIZE; candidate++) {
+      if (positionByCandidate[candidate].length !== 1) {
+        continue;
+      }
+
+      return {
+        row: positionByCandidate[candidate][0],
+        col,
+        value: candidate,
+        reason: 'hidden_single_col',
+      };
+    }
+  }
+
+  return null;
+};
+
+const findHiddenSingleInBox = (board: FillableBoard): SolvePlanStep | null => {
+  for (let boxRow = 0; boxRow < BOX_SIZE; boxRow++) {
+    for (let boxCol = 0; boxCol < BOX_SIZE; boxCol++) {
+      const startRow = boxRow * BOX_SIZE;
+      const startCol = boxCol * BOX_SIZE;
+      const positionByCandidate: CandidateMap = Array.from(
+        { length: GRID_SIZE + 1 },
+        () => []
+      );
+
+      for (let row = startRow; row < startRow + BOX_SIZE; row++) {
+        for (let col = startCol; col < startCol + BOX_SIZE; col++) {
+          const candidates = getCandidates(board, row, col);
+          for (const candidate of candidates) {
+            positionByCandidate[candidate].push(row * GRID_SIZE + col);
+          }
+        }
+      }
+
+      for (let candidate = 1; candidate <= GRID_SIZE; candidate++) {
+        if (positionByCandidate[candidate].length !== 1) {
+          continue;
+        }
+
+        const encoded = positionByCandidate[candidate][0];
+
+        return {
+          row: Math.floor(encoded / GRID_SIZE),
+          col: encoded % GRID_SIZE,
+          value: candidate,
+          reason: 'hidden_single_box',
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
+const findHumanStep = (board: FillableBoard): SolvePlanStep | null => {
+  return (
+    findNakedSingleStep(board) ??
+    findHiddenSingleInRow(board) ??
+    findHiddenSingleInCol(board) ??
+    findHiddenSingleInBox(board)
+  );
+};
+
+const applyHumanSteps = (board: FillableBoard, steps: SolvePlanStep[]): void => {
+  while (true) {
+    const nextStep = findHumanStep(board);
+    if (!nextStep) {
+      return;
+    }
+
+    board[nextStep.row][nextStep.col] = nextStep.value;
+    steps.push(nextStep);
+  }
+};
+
+const findGuidedStep = (
+  board: FillableBoard,
+  solvedBoard: FillableBoard
+): SolvePlanStep | null => {
+  let bestStep: SolvePlanStep | null = null;
+  let smallestCandidateSize = GRID_SIZE + 1;
+
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      if (board[row][col] !== 0) {
+        continue;
+      }
+
+      const candidates = getCandidates(board, row, col);
+      if (candidates.length === 0) {
+        return null;
+      }
+
+      const targetValue = solvedBoard[row][col];
+      if (!candidates.includes(targetValue)) {
+        return null;
+      }
+
+      if (candidates.length < smallestCandidateSize) {
+        smallestCandidateSize = candidates.length;
+        bestStep = {
+          row,
+          col,
+          value: targetValue,
+          reason: 'guided_choice',
+        };
+      }
+    }
+  }
+
+  return bestStep;
+};
+
 export const isBoardShape = (value: unknown): value is Board => {
   if (!Array.isArray(value) || value.length !== GRID_SIZE) {
     return false;
@@ -192,6 +411,39 @@ export const solveBoard = (board: Board): Board | null => {
   }
 
   return denormalizeBoard(normalized);
+};
+
+export const createSolvePlan = (board: Board): SolvePlanStep[] | null => {
+  if (hasBoardConflicts(board)) {
+    return null;
+  }
+
+  const workingBoard = normalizeBoard(board);
+  const steps: SolvePlanStep[] = [];
+
+  applyHumanSteps(workingBoard, steps);
+
+  if (!hasEmptyCell(workingBoard)) {
+    return steps;
+  }
+
+  const solvedBoard = cloneNormalizedBoard(workingBoard);
+  if (!solveNormalizedBoard(solvedBoard)) {
+    return null;
+  }
+
+  while (hasEmptyCell(workingBoard)) {
+    const guidedStep = findGuidedStep(workingBoard, solvedBoard);
+    if (!guidedStep) {
+      return null;
+    }
+
+    workingBoard[guidedStep.row][guidedStep.col] = guidedStep.value;
+    steps.push(guidedStep);
+    applyHumanSteps(workingBoard, steps);
+  }
+
+  return steps;
 };
 
 export function createPuzzleAndSolution(difficulty: string): {
