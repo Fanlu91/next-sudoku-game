@@ -297,13 +297,13 @@ const SudokuBoard = ({
       return;
     }
 
-    const initialPlan = createSolvePlan(workingBoard);
-    if (!initialPlan) {
+    const solvePlan = createSolvePlan(workingBoard);
+    if (!solvePlan) {
       setSaveError('This puzzle cannot be solved from the current board.');
       return;
     }
 
-    if (initialPlan.length === 0) {
+    if (solvePlan.length === 0) {
       return;
     }
 
@@ -311,17 +311,8 @@ const SudokuBoard = ({
     setIsAutoSolving(true);
 
     try {
-      while (hasEmptyCell(workingBoard)) {
-        const nextPlan = createSolvePlan(workingBoard);
-        if (!nextPlan) {
-          throw new Error('Puzzle became unsolvable');
-        }
-
-        const step = nextPlan[0];
-        if (!step) {
-          break;
-        }
-
+      for (let index = 0; index < solvePlan.length; index++) {
+        const step = solvePlan[index];
         await persistMove(step.row, step.col, step.value);
 
         workingBoard[step.row][step.col] = step.value;
@@ -333,7 +324,7 @@ const SudokuBoard = ({
         });
         setSaveError(null);
 
-        if (hasEmptyCell(workingBoard)) {
+        if (index < solvePlan.length - 1) {
           await new Promise<void>((resolve) => {
             window.setTimeout(resolve, STEP_DELAY_MS);
           });
