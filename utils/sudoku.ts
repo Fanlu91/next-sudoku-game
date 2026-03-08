@@ -187,24 +187,48 @@ const getCandidates = (board: FillableBoard, row: number, col: number): number[]
   return candidates;
 };
 
-const findNakedSingleStep = (board: FillableBoard): SolvePlanStep | null => {
+const getDeterministicCellStep = (
+  board: FillableBoard,
+  row: number,
+  col: number
+): SolvePlanStep | null => {
+  if (board[row][col] !== 0) {
+    return null;
+  }
+
+  const candidates = getCandidates(board, row, col);
+  if (candidates.length !== 1) {
+    return null;
+  }
+
+  return {
+    row,
+    col,
+    value: candidates[0],
+    reason: 'naked_single',
+  };
+};
+
+const applyDeterministicCellSweep = (
+  board: FillableBoard,
+  steps: SolvePlanStep[]
+): boolean => {
+  let madeProgress = false;
+
   for (let row = 0; row < GRID_SIZE; row++) {
     for (let col = 0; col < GRID_SIZE; col++) {
-      const candidates = getCandidates(board, row, col);
-      if (candidates.length !== 1) {
+      const step = getDeterministicCellStep(board, row, col);
+      if (!step) {
         continue;
       }
 
-      return {
-        row,
-        col,
-        value: candidates[0],
-        reason: 'naked_single',
-      };
+      board[step.row][step.col] = step.value;
+      steps.push(step);
+      madeProgress = true;
     }
   }
 
-  return null;
+  return madeProgress;
 };
 
 const findHiddenSingleInRow = (board: FillableBoard): SolvePlanStep | null => {
@@ -308,9 +332,8 @@ const findHiddenSingleInBox = (board: FillableBoard): SolvePlanStep | null => {
   return null;
 };
 
-const findHumanStep = (board: FillableBoard): SolvePlanStep | null => {
+const findHiddenSingleStep = (board: FillableBoard): SolvePlanStep | null => {
   return (
-    findNakedSingleStep(board) ??
     findHiddenSingleInRow(board) ??
     findHiddenSingleInCol(board) ??
     findHiddenSingleInBox(board)
@@ -319,13 +342,18 @@ const findHumanStep = (board: FillableBoard): SolvePlanStep | null => {
 
 const applyHumanSteps = (board: FillableBoard, steps: SolvePlanStep[]): void => {
   while (true) {
-    const nextStep = findHumanStep(board);
-    if (!nextStep) {
+    const madeProgress = applyDeterministicCellSweep(board, steps);
+    if (madeProgress) {
+      continue;
+    }
+
+    const hiddenSingleStep = findHiddenSingleStep(board);
+    if (!hiddenSingleStep) {
       return;
     }
 
-    board[nextStep.row][nextStep.col] = nextStep.value;
-    steps.push(nextStep);
+    board[hiddenSingleStep.row][hiddenSingleStep.col] = hiddenSingleStep.value;
+    steps.push(hiddenSingleStep);
   }
 };
 
