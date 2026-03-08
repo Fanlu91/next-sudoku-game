@@ -209,23 +209,40 @@ const getDeterministicCellStep = (
   };
 };
 
+const getNextDeterministicCellStep = (
+  board: FillableBoard,
+  startIndex = 0
+): SolvePlanStep | null => {
+  for (let index = startIndex; index < GRID_SIZE * GRID_SIZE; index++) {
+    const row = Math.floor(index / GRID_SIZE);
+    const col = index % GRID_SIZE;
+    const step = getDeterministicCellStep(board, row, col);
+
+    if (step) {
+      return step;
+    }
+  }
+
+  return null;
+};
+
 const applyDeterministicCellSweep = (
   board: FillableBoard,
   steps: SolvePlanStep[]
 ): boolean => {
   let madeProgress = false;
+  let nextIndex = 0;
 
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      const step = getDeterministicCellStep(board, row, col);
-      if (!step) {
-        continue;
-      }
-
-      board[step.row][step.col] = step.value;
-      steps.push(step);
-      madeProgress = true;
+  while (nextIndex < GRID_SIZE * GRID_SIZE) {
+    const step = getNextDeterministicCellStep(board, nextIndex);
+    if (!step) {
+      break;
     }
+
+    board[step.row][step.col] = step.value;
+    steps.push(step);
+    madeProgress = true;
+    nextIndex = step.row * GRID_SIZE + step.col + 1;
   }
 
   return madeProgress;
