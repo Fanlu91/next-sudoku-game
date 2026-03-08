@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GameResult, GameStatus, MoveRecord } from '@/lib/game-types';
 import { Board, createSolvePlan } from '@/utils/sudoku';
 
@@ -152,6 +153,7 @@ const SudokuBoard = ({
   initialStatus,
   initialResult,
 }: SudokuBoardProps) => {
+  const router = useRouter();
   const sortedMoves = useMemo(() => sortMoves(initialMoves), [initialMoves]);
   const isReplayMode = initialStatus !== 'in_progress' || initialResult !== null;
   const totalReplaySteps = sortedMoves.length;
@@ -160,6 +162,7 @@ const SudokuBoard = ({
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isAutoSolving, setIsAutoSolving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingMoveSaves, setPendingMoveSaves] = useState(0);
   const editableCells = useMemo(() => createEditableCells(initialPuzzle), [initialPuzzle]);
   const lastPersistedResult = useRef<GameResult | null>(initialResult);
   const replayBoard = useMemo(
@@ -200,11 +203,16 @@ const SudokuBoard = ({
       return null;
     }
 
+    if (pendingMoveSaves > 0) {
+      return null;
+    }
+
     return isSolvedBoard(renderedBoard) ? 'solved' : 'errors';
   }, [
     initialResult,
     isBoardFull,
     isReplayMode,
+    pendingMoveSaves,
     renderedBoard,
     replayStep,
     totalReplaySteps,
@@ -249,15 +257,16 @@ const SudokuBoard = ({
 
       lastPersistedResult.current = completionState;
       setSaveError(null);
+      router.refresh();
     };
 
     void persistResult().catch(() => {
       setSaveError('Could not save game result.');
     });
-  }, [completionState, gameId, isReplayMode]);
+  }, [completionState, gameId, isReplayMode, router]);
 
   const updateCell = (row: number, col: number, input: string) => {
-    if (isReplayMode || isAutoSolving || !editableCells[row][col]) {
+    if (isReplayMode || isAutoSolving || pendingMoveSaves > 0 || !editableCells[row][col]) {
       return;
     }
 
@@ -267,6 +276,11 @@ const SudokuBoard = ({
     }
 
     const nextValue = nextChar === '' ? null : Number(nextChar);
+    const previousValue = board[row][col];
+
+    if (previousValue === nextValue) {
+      return;
+    }
 
     setBoard((previous) => {
       const nextBoard = previous.map((currentRow) => [...currentRow]);
@@ -274,17 +288,26 @@ const SudokuBoard = ({
       return nextBoard;
     });
 
+    setPendingMoveSaves((previous) => previous + 1);
     void persistMove(row, col, nextValue)
       .then(() => {
         setSaveError(null);
       })
       .catch(() => {
+        setBoard((previous) => {
+          const nextBoard = previous.map((currentRow) => [...currentRow]);
+          nextBoard[row][col] = previousValue;
+          return nextBoard;
+        });
         setSaveError('Could not save your latest move.');
+      })
+      .finally(() => {
+        setPendingMoveSaves((previous) => Math.max(previous - 1, 0));
       });
   };
 
   const autoSolve = async () => {
-    if (isReplayMode || isAutoSolving) {
+    if (isReplayMode || isAutoSolving || pendingMoveSaves > 0) {
       return;
     }
 
@@ -378,7 +401,7 @@ const SudokuBoard = ({
             onClick={() => {
               void autoSolve();
             }}
-            disabled={isAutoSolving || completionState === 'solved'}
+            disabled={isAutoSolving || pendingMoveSaves > 0 || completionState === 'solved'}
             className="mt-2 rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
           >
             {isAutoSolving ? 'Auto-solving (2s/step)...' : 'Auto Solve'}
@@ -442,7 +465,7 @@ const SudokuBoard = ({
                 inputMode="numeric"
                 maxLength={1}
                 value={value ?? ''}
-                disabled={isReplayMode || isAutoSolving || !isEditable}
+                disabled={isReplayMode || isAutoSolving || pendingMoveSaves > 0 || !isEditable}
                 onChange={(event) =>
                   updateCell(rowIndex, colIndex, event.target.value)
                 }
@@ -470,6 +493,7 @@ const SudokuBoard = ({
         {!isReplayMode && !isBoardFull && (
           'Fill the blank cells. Invalid entries are highlighted in red.'
         )}
+        {!isReplayMode && pendingMoveSaves > 0 && <span>Saving your latest move...</span>}
         {!isReplayMode && completionState === 'solved' && (
           <span className="font-medium text-green-700">Solved correctly.</span>
         )}
