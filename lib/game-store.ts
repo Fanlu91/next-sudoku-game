@@ -40,6 +40,16 @@ const writeStore = async (store: GameStore): Promise<void> => {
   await writeFile(STORE_PATH, JSON.stringify(store), 'utf8');
 };
 
+const generateUniqueGameId = (store: GameStore): string => {
+  let id = randomUUID();
+
+  while (store.games[id]) {
+    id = randomUUID();
+  }
+
+  return id;
+};
+
 const sortMoves = (moves: MoveRecord[]): MoveRecord[] => {
   return [...moves].sort((left, right) => left.step - right.step);
 };
@@ -72,7 +82,7 @@ const createGameRecord = (id: string, puzzle: Board, solution: Board): GameRecor
 
 export const createGame = async (difficulty = 'normal'): Promise<GameRecord> => {
   const store = await readStore();
-  const id = randomUUID();
+  const id = generateUniqueGameId(store);
   const { puzzle, solution } = createPuzzleAndSolution(difficulty);
   const game = createGameRecord(id, puzzle, solution);
 
@@ -91,7 +101,7 @@ export const createGameFromPuzzle = async (puzzle: Board): Promise<GameRecord | 
   }
 
   const store = await readStore();
-  const id = randomUUID();
+  const id = generateUniqueGameId(store);
   const game = createGameRecord(
     id,
     puzzle.map((row) => [...row]),
