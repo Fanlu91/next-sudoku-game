@@ -1,11 +1,22 @@
 export type Board = (number | null)[][];
 
 const GRID_SIZE = 9;
+const BOX_SIZE = 3;
+
+type FillableBoard = number[][];
+
+const isIntegerInRange = (value: unknown, min: number, max: number): value is number => {
+  return Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+};
+
+const isCellValue = (value: unknown): value is number | null => {
+  return value === null || isIntegerInRange(value, 1, GRID_SIZE);
+};
 
 function isValid(board: Board, row: number, col: number, num: number): boolean {
   for (let i = 0; i < GRID_SIZE; i++) {
-    const m = 3 * Math.floor(row / 3) + Math.floor(i / 3);
-    const n = 3 * Math.floor(col / 3) + (i % 3);
+    const m = BOX_SIZE * Math.floor(row / BOX_SIZE) + Math.floor(i / BOX_SIZE);
+    const n = BOX_SIZE * Math.floor(col / BOX_SIZE) + (i % BOX_SIZE);
 
     if (board[row][i] === num || board[i][col] === num || board[m][n] === num) {
       return false;
@@ -71,6 +82,117 @@ function clearCellsForDifficulty(board: Board, difficulty: string): void {
     cleared += 1;
   }
 }
+
+const normalizeBoard = (board: Board): FillableBoard => {
+  return board.map((row) =>
+    row.map((value) => {
+      return value === null ? 0 : value;
+    })
+  );
+};
+
+const denormalizeBoard = (board: FillableBoard): Board => {
+  return board.map((row) => row.map((value) => (value === 0 ? null : value)));
+};
+
+const isValidPlacement = (board: FillableBoard, row: number, col: number, num: number): boolean => {
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (board[row][i] === num || board[i][col] === num) {
+      return false;
+    }
+  }
+
+  const startRow = Math.floor(row / BOX_SIZE) * BOX_SIZE;
+  const startCol = Math.floor(col / BOX_SIZE) * BOX_SIZE;
+
+  for (let r = startRow; r < startRow + BOX_SIZE; r++) {
+    for (let c = startCol; c < startCol + BOX_SIZE; c++) {
+      if (board[r][c] === num) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
+
+const solveNormalizedBoard = (board: FillableBoard): boolean => {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      if (board[row][col] !== 0) {
+        continue;
+      }
+
+      for (let candidate = 1; candidate <= GRID_SIZE; candidate++) {
+        if (!isValidPlacement(board, row, col, candidate)) {
+          continue;
+        }
+
+        board[row][col] = candidate;
+        if (solveNormalizedBoard(board)) {
+          return true;
+        }
+        board[row][col] = 0;
+      }
+
+      return false;
+    }
+  }
+
+  return true;
+};
+
+export const isBoardShape = (value: unknown): value is Board => {
+  if (!Array.isArray(value) || value.length !== GRID_SIZE) {
+    return false;
+  }
+
+  return value.every((row) => {
+    if (!Array.isArray(row) || row.length !== GRID_SIZE) {
+      return false;
+    }
+
+    return row.every((cell) => isCellValue(cell));
+  });
+};
+
+export const hasBoardConflicts = (board: Board): boolean => {
+  const normalized = normalizeBoard(board);
+
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const value = normalized[row][col];
+      if (value === 0) {
+        continue;
+      }
+
+      normalized[row][col] = 0;
+      const isAllowed = isValidPlacement(normalized, row, col, value);
+      normalized[row][col] = value;
+
+      if (!isAllowed) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+export const solveBoard = (board: Board): Board | null => {
+  if (hasBoardConflicts(board)) {
+    return null;
+  }
+
+  const normalized = normalizeBoard(board);
+  const solved = solveNormalizedBoard(normalized);
+
+  if (!solved) {
+    return null;
+  }
+
+  return denormalizeBoard(normalized);
+};
 
 export function createPuzzleAndSolution(difficulty: string): {
   puzzle: Board;

@@ -11,7 +11,7 @@ import {
   MoveRecord,
   PersistedGame,
 } from '@/lib/game-types';
-import { createPuzzleAndSolution } from '@/utils/sudoku';
+import { Board, createPuzzleAndSolution, solveBoard } from '@/utils/sudoku';
 
 const DATA_DIRECTORY = path.join(process.cwd(), '.data');
 const STORE_PATH = path.join(DATA_DIRECTORY, 'sudoku-games.json');
@@ -56,13 +56,10 @@ const buildPersistedGame = (store: GameStore, id: string): PersistedGame | null 
   };
 };
 
-export const createGame = async (difficulty = 'normal'): Promise<GameRecord> => {
-  const store = await readStore();
-  const id = randomUUID();
+const createGameRecord = (id: string, puzzle: Board, solution: Board): GameRecord => {
   const timestamp = new Date().toISOString();
-  const { puzzle, solution } = createPuzzleAndSolution(difficulty);
 
-  const game: GameRecord = {
+  return {
     id,
     puzzle,
     solution,
@@ -71,6 +68,35 @@ export const createGame = async (difficulty = 'normal'): Promise<GameRecord> => 
     createdAt: timestamp,
     completedAt: null,
   };
+};
+
+export const createGame = async (difficulty = 'normal'): Promise<GameRecord> => {
+  const store = await readStore();
+  const id = randomUUID();
+  const { puzzle, solution } = createPuzzleAndSolution(difficulty);
+  const game = createGameRecord(id, puzzle, solution);
+
+  store.games[id] = game;
+  store.moves[id] = [];
+
+  await writeStore(store);
+
+  return game;
+};
+
+export const createGameFromPuzzle = async (puzzle: Board): Promise<GameRecord | null> => {
+  const solution = solveBoard(puzzle);
+  if (!solution) {
+    return null;
+  }
+
+  const store = await readStore();
+  const id = randomUUID();
+  const game = createGameRecord(
+    id,
+    puzzle.map((row) => [...row]),
+    solution
+  );
 
   store.games[id] = game;
   store.moves[id] = [];

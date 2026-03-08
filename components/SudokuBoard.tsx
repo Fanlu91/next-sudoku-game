@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameResult, GameStatus, MoveRecord } from '@/lib/game-types';
-import { Board } from '@/utils/sudoku';
+import { Board, solveBoard } from '@/utils/sudoku';
 
 const GRID_SIZE = 9;
+const STEP_DELAY_MS = 2000;
 
 type CompletionState = GameResult | null;
 
@@ -151,6 +152,7 @@ const SudokuBoard = ({
   const [board, setBoard] = useState<Board>(() => applyMoves(initialPuzzle, sortedMoves));
   const [replayStep, setReplayStep] = useState<number>(isReplayMode ? 0 : totalReplaySteps);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const [isAutoSolving, setIsAutoSolving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editableCells = useMemo(() => createEditableCells(initialPuzzle), [initialPuzzle]);
   const lastPersistedResult = useRef<GameResult | null>(initialResult);
@@ -197,7 +199,7 @@ const SudokuBoard = ({
 
     const timer = window.setTimeout(() => {
       setReplayStep((previous) => Math.min(previous + 1, totalReplaySteps));
-    }, 700);
+    }, STEP_DELAY_MS);
 
     return () => {
       window.clearTimeout(timer);
@@ -232,7 +234,7 @@ const SudokuBoard = ({
   }, [completionState, gameId, isReplayMode]);
 
   const updateCell = (row: number, col: number, input: string) => {
-    if (isReplayMode || !editableCells[row][col]) {
+    if (isReplayMode || isAutoSolving || !editableCells[row][col]) {
       return;
     }
 
@@ -268,6 +270,76 @@ const SudokuBoard = ({
       });
   };
 
+  const autoSolve = async () => {
+    if (isReplayMode || isAutoSolving) {
+      return;
+    }
+
+    const solvedBoard = solveBoard(board);
+    if (!solvedBoard) {
+      setSaveError('This puzzle cannot be solved from the current board.');
+      return;
+    }
+
+    const steps: Array<{ row: number; col: number; value: number }> = [];
+
+    for (let row = 0; row < GRID_SIZE; row++) {
+      for (let col = 0; col < GRID_SIZE; col++) {
+        if (board[row][col] !== null) {
+          continue;
+        }
+
+        const value = solvedBoard[row][col];
+        if (value === null) {
+          continue;
+        }
+
+        steps.push({ row, col, value });
+      }
+    }
+
+    if (steps.length === 0) {
+      return;
+    }
+
+    setSaveError(null);
+    setIsAutoSolving(true);
+
+    try {
+      for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
+        const step = steps[stepIndex];
+
+        setBoard((previous) => {
+          const nextBoard = previous.map((currentRow) => [...currentRow]);
+          nextBoard[step.row][step.col] = step.value;
+          return nextBoard;
+        });
+
+        const response = await fetch(`/api/games/${gameId}/moves`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(step),
+        });
+
+        if (!response.ok) {
+          throw new Error('Unable to save auto-solve move');
+        }
+
+        if (stepIndex < steps.length - 1) {
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, STEP_DELAY_MS);
+          });
+        }
+      }
+    } catch {
+      setSaveError('Auto-solve failed while saving steps.');
+    } finally {
+      setIsAutoSolving(false);
+    }
+  };
+
   const goToPreviousStep = () => {
     setIsAutoPlaying(false);
     setReplayStep((previous) => Math.max(previous - 1, 0));
@@ -297,6 +369,24 @@ const SudokuBoard = ({
         <h1 className="text-xl font-semibold">Sudoku</h1>
         <p className="text-xs text-slate-500">Game ID: {gameId}</p>
       </div>
+
+      {!isReplayMode && (
+        <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-3">
+          <p className="text-sm text-slate-700">
+            Use auto-solve to run the JS solver and save each step for replay.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void autoSolve();
+            }}
+            disabled={isAutoSolving || completionState === 'solved'}
+            className="mt-2 rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+          >
+            {isAutoSolving ? 'Auto-solving (2s/step)...' : 'Auto Solve'}
+          </button>
+        </div>
+      )}
 
       {isReplayMode && (
         <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-3">
@@ -354,7 +444,7 @@ const SudokuBoard = ({
                 inputMode="numeric"
                 maxLength={1}
                 value={value ?? ''}
-                disabled={isReplayMode || !isEditable}
+                disabled={isReplayMode || isAutoSolving || !isEditable}
                 onChange={(event) =>
                   updateCell(rowIndex, colIndex, event.target.value)
                 }
@@ -389,6 +479,9 @@ const SudokuBoard = ({
           <span className="font-medium text-red-700">
             Board is full, but the solution has errors.
           </span>
+        )}
+        {!isReplayMode && isAutoSolving && (
+          <span>Auto-solving in progress. One move is applied every 2 seconds.</span>
         )}
         {isReplayMode && replayStep < totalReplaySteps && (
           <span>Use previous/next or auto-play to step through the saved moves.</span>
