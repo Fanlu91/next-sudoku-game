@@ -404,7 +404,7 @@ const SudokuBoard = ({
             disabled={isAutoSolving || pendingMoveSaves > 0 || completionState === 'solved'}
             className="mt-2 rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
           >
-            {isAutoSolving ? 'Auto-solving (2s/step)...' : 'Auto Solve'}
+            {isAutoSolving ? 'Auto-solving (2s/step)...' : 'Auto Solve (2s/step)'}
           </button>
         </div>
       )}
