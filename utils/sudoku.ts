@@ -110,25 +110,31 @@ const denormalizeBoard = (board: FillableBoard): Board => {
   return board.map((row) => row.map((value) => (value === 0 ? null : value)));
 };
 
-const isValidPlacement = (board: FillableBoard, row: number, col: number, num: number): boolean => {
-  for (let i = 0; i < GRID_SIZE; i++) {
-    if (board[row][i] === num || board[i][col] === num) {
-      return false;
-    }
-  }
+const getGroupsForCell = (
+  board: FillableBoard,
+  row: number,
+  col: number
+): [number[], number[], number[]] => {
+  const rowGroup = [...board[row]];
+  const colGroup = board.map((currentRow) => currentRow[col]);
+  const boxGroup: number[] = [];
 
   const startRow = Math.floor(row / BOX_SIZE) * BOX_SIZE;
   const startCol = Math.floor(col / BOX_SIZE) * BOX_SIZE;
 
   for (let r = startRow; r < startRow + BOX_SIZE; r++) {
     for (let c = startCol; c < startCol + BOX_SIZE; c++) {
-      if (board[r][c] === num) {
-        return false;
-      }
+      boxGroup.push(board[r][c]);
     }
   }
 
-  return true;
+  return [rowGroup, colGroup, boxGroup];
+};
+
+const isValidPlacement = (board: FillableBoard, row: number, col: number, num: number): boolean => {
+  const [rowGroup, colGroup, boxGroup] = getGroupsForCell(board, row, col);
+
+  return !rowGroup.includes(num) && !colGroup.includes(num) && !boxGroup.includes(num);
 };
 
 const solveNormalizedBoard = (board: FillableBoard): boolean => {

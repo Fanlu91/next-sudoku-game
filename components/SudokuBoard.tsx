@@ -99,11 +99,17 @@ const getInvalidCells = (board: Board): boolean[][] => {
 };
 
 const isValidGroup = (values: (number | null)[]): boolean => {
-  if (values.some((value) => value === null)) {
+  const digits = values.filter((value): value is number => value !== null);
+
+  if (digits.length !== GRID_SIZE) {
     return false;
   }
 
-  return new Set(values).size === GRID_SIZE;
+  if (digits.some((value) => value < 1 || value > GRID_SIZE)) {
+    return false;
+  }
+
+  return new Set(digits).size === GRID_SIZE;
 };
 
 const isSolvedBoard = (board: Board): boolean => {
