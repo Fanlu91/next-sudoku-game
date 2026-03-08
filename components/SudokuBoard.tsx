@@ -173,6 +173,23 @@ const SudokuBoard = ({
     () => renderedBoard.every((row) => row.every((cell) => cell !== null)),
     [renderedBoard]
   );
+  const persistMove = async (
+    row: number,
+    col: number,
+    value: number | null
+  ): Promise<void> => {
+    const response = await fetch(`/api/games/${gameId}/moves`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ row, col, value }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Unable to save move');
+    }
+  };
 
   const completionState: CompletionState = useMemo(() => {
     if (isReplayMode) {
@@ -257,18 +274,8 @@ const SudokuBoard = ({
       return nextBoard;
     });
 
-    void fetch(`/api/games/${gameId}/moves`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ row, col, value: nextValue }),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to save move');
-        }
-
+    void persistMove(row, col, nextValue)
+      .then(() => {
         setSaveError(null);
       })
       .catch(() => {
@@ -315,6 +322,8 @@ const SudokuBoard = ({
           break;
         }
 
+        await persistMove(step.row, step.col, step.value);
+
         workingBoard[step.row][step.col] = step.value;
 
         setBoard((previous) => {
@@ -322,18 +331,7 @@ const SudokuBoard = ({
           nextBoard[step.row][step.col] = step.value;
           return nextBoard;
         });
-
-        const response = await fetch(`/api/games/${gameId}/moves`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(step),
-        });
-
-        if (!response.ok) {
-          throw new Error('Unable to save auto-solve move');
-        }
+        setSaveError(null);
 
         if (hasEmptyCell(workingBoard)) {
           await new Promise<void>((resolve) => {
