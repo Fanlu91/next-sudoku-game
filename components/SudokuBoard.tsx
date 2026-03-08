@@ -281,19 +281,22 @@ const SudokuBoard = ({
       return;
     }
 
-    const solvePlan = createSolvePlan(board);
-    if (!solvePlan) {
+    const workingBoard = board.map((row) => [...row]);
+    const hasEmptyCell = (nextBoard: Board): boolean => {
+      return nextBoard.some((row) => row.some((cell) => cell === null));
+    };
+
+    if (!hasEmptyCell(workingBoard)) {
+      return;
+    }
+
+    const initialPlan = createSolvePlan(workingBoard);
+    if (!initialPlan) {
       setSaveError('This puzzle cannot be solved from the current board.');
       return;
     }
 
-    const steps = solvePlan.map((step) => ({
-      row: step.row,
-      col: step.col,
-      value: step.value,
-    }));
-
-    if (steps.length === 0) {
+    if (initialPlan.length === 0) {
       return;
     }
 
@@ -301,8 +304,18 @@ const SudokuBoard = ({
     setIsAutoSolving(true);
 
     try {
-      for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
-        const step = steps[stepIndex];
+      while (hasEmptyCell(workingBoard)) {
+        const nextPlan = createSolvePlan(workingBoard);
+        if (!nextPlan) {
+          throw new Error('Puzzle became unsolvable');
+        }
+
+        const step = nextPlan[0];
+        if (!step) {
+          break;
+        }
+
+        workingBoard[step.row][step.col] = step.value;
 
         setBoard((previous) => {
           const nextBoard = previous.map((currentRow) => [...currentRow]);
@@ -322,7 +335,7 @@ const SudokuBoard = ({
           throw new Error('Unable to save auto-solve move');
         }
 
-        if (stepIndex < steps.length - 1) {
+        if (hasEmptyCell(workingBoard)) {
           await new Promise<void>((resolve) => {
             window.setTimeout(resolve, STEP_DELAY_MS);
           });
