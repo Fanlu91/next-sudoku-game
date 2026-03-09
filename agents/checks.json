@@ -1,3 +1,16 @@
 {
-  "checks": []
+  "checks": [
+    {
+      "name": "node:lint",
+      "command": "npm run lint",
+      "stack": "node",
+      "mode": "required"
+    },
+    {
+      "name": "node:build",
+      "command": "npm run build",
+      "stack": "node",
+      "mode": "required"
+    }
+  ]
 }
