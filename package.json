@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/run-next.mjs build",
+    "build": "next build",
     "start": "next start",
-    "lint": "node scripts/run-next.mjs lint"
+    "lint": "next lint"
   },
   "dependencies": {
     "next": "^14.0.4",
