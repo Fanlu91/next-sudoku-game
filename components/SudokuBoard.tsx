@@ -407,7 +407,7 @@ const SudokuBoard = ({
             {isAutoSolving ? 'Auto-solving (2s/step)...' : 'Auto Solve'}
           </button>
           <p className="mt-2 text-xs text-slate-600">
-            Auto Solve reveals one move every 2 seconds.
+            Auto Solve fills one cell every 2 seconds.
           </p>
         </div>
       )}
