@@ -4,6 +4,11 @@ This is a doc about the learning process of creating a sudoku website using verc
 
 I have some background knowledge of how to build a site but has never used react/next.js/vercel. 
 
+## Current Auto Solve Behavior
+
+- Auto Solve fills one cell every 2 seconds.
+- Each auto-solving step is stored so the full solving process can be replayed later.
+
 
 
 # Step 0
